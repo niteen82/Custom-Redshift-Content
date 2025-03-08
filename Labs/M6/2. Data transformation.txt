@@ -1,0 +1,87 @@
+Create an external schema and table
+
+CREATE EXTERNAL SCHEMA spectrum
+FROM DATA CATALOG
+DATABASE spectrumdb
+IAM_ROLE 'INSERT_REDSHIFT_ROLE'
+CREATE EXTERNAL DATABASE IF NOT EXISTS;
+
+
+CREATE EXTERNAL SCHEMA spectrum
+FROM DATA CATALOG
+DATABASE spectrumdb
+IAM_ROLE 'arn:aws:iam::146962103229:role/RedshiftAccessRole'
+CREATE EXTERNAL DATABASE IF NOT EXISTS;
+
+
+
+Create an external table with the spectrum schema named stocksummary
+
+DROP TABLE IF EXISTS spectrum.stocksummary;
+CREATE EXTERNAL TABLE spectrum.stocksummary(
+    Trade_Date VARCHAR(15),
+    Ticker VARCHAR(5),
+    High DECIMAL(8,2),
+    Low DECIMAL(8,2),
+    Open_value DECIMAL(8,2),
+    Close DECIMAL(8,2),
+    Volume DECIMAL(15),
+    Adj_Close DECIMAL(8,2)
+)
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY ','
+STORED AS TEXTFILE
+LOCATION 's3://INSERT_DATA_BUCKET/data/';
+
+
+DROP TABLE IF EXISTS spectrum.stocksummary;
+CREATE EXTERNAL TABLE spectrum.stocksummary(
+    Trade_Date VARCHAR(15),
+    Ticker VARCHAR(5),
+    High DECIMAL(8,2),
+    Low DECIMAL(8,2),
+    Open_value DECIMAL(8,2),
+    Close DECIMAL(8,2),
+    Volume DECIMAL(15),
+    Adj_Close DECIMAL(8,2)
+)
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY ','
+STORED AS TEXTFILE
+LOCATION 's3://redshift-lab-databucket/data/';
+
+
+SELECT * FROM spectrum.stocksummary
+    WHERE trade_date = '2020-01-03'
+    ORDER BY trade_date ASC, ticker ASC;
+
+--------------------------------------------
+Create and query a materialized view
+--------------------------------------------
+DROP MATERIALIZED VIEW IF EXISTS stocks_mv;
+CREATE MATERIALIZED VIEW stocks_mv AS
+    SELECT trade_date, ticker, volume FROM spectrum.stocksummary;
+
+
+
+SELECT * FROM stocks_mv
+    WHERE trade_date = '2020-01-03'
+    ORDER BY trade_date ASC, ticker ASC;
+
+
+-----------------------------------------
+Query for the most popular stocks
+------------------------------------------
+WITH tmp_variables AS (
+SELECT
+   '2020-02-16'::DATE AS StartDate
+)
+
+SELECT
+    ticker,
+    SUM(volume) AS sum_volume
+FROM stocks_mv
+WHERE trade_date BETWEEN (SELECT StartDate FROM tmp_variables)-6 AND (SELECT StartDate FROM tmp_variables)
+GROUP BY ticker
+ORDER BY sum_volume DESC
+LIMIT 3;

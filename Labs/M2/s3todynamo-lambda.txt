@@ -1,0 +1,54 @@
+import json
+import boto3
+import csv
+import io
+
+# Create DynamoDB and S3 clients
+dynamodb = boto3.resource('dynamodb')
+s3 = boto3.client('s3')
+
+# DynamoDB Table Name
+DYNAMO_DB_TABLE = 'CsvDataTable'  # Replace with your DynamoDB table name
+
+def lambda_handler(event, context):
+    # Get the S3 bucket name and file key from the event object
+    bucket_name = event['Records'][0]['s3']['bucket']['name']
+    file_key = event['Records'][0]['s3']['object']['key']
+    
+    # Get the DynamoDB table object
+    table = dynamodb.Table(DYNAMO_DB_TABLE)
+    
+    try:
+        # Fetch the CSV file from the S3 bucket
+        response = s3.get_object(Bucket=bucket_name, Key=file_key)
+        csv_content = response['Body'].read().decode('utf-8')  # Decode CSV content into string
+        
+        # Read the CSV content using csv.reader
+        csv_reader = csv.DictReader(io.StringIO(csv_content))
+        
+        # Loop through each row in the CSV file and insert it into DynamoDB
+        for row in csv_reader:
+            # Assuming CSV has 'id' as the partition key, and any other columns as attributes
+            # You can modify this part based on your DynamoDB table's schema
+            item = {
+                'id': row['id'],  # Replace 'id' with your partition key in the CSV
+                'timestamp': row['timestamp'],  # Optional: You can add a timestamp or other fields
+                'name': row['name'],  # Additional fields
+                'age': int(row['age'])  # You may need to convert types, e.g., age as an integer
+            }
+            
+            # Insert the item into DynamoDB
+            table.put_item(Item=item)
+        
+        # Return success message
+        return {
+            'statusCode': 200,
+            'body': json.dumps(f'Successfully processed file: {file_key} and inserted records into DynamoDB')
+        }
+
+    except Exception as e:
+        print(f"Error processing the file {file_key}: {e}")
+        return {
+            'statusCode': 500,
+            'body': json.dumps({'message': 'Failed to process the file', 'error': str(e)})
+        }
